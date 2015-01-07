@@ -8,7 +8,7 @@
 
 #include "arg.h"
 
-#define LEN(x) (sizeof((x)) / sizeof(*(x)))
+#define LEN(x) (sizeof (x) / sizeof *(x))
 
 char *argv0;
 
@@ -81,42 +81,45 @@ void usage(void) {
 			"\n"
 			"-h    Help\n"
 			"-i    Use ISO-8859-1 instead of UTF-8\n"
+			"-s    Use SI units instead of IEC\n"
 			, argv0);
 }
 
 int main(int argc, char **argv) {
 	int i;
+	int j;
 	int totlength = 0;
 	int totsize = 0;
+	int avgbitrate = 0;
 	TagLib_File *file;
 	TagLib_Tag *tag;
 	const TagLib_AudioProperties *properties;
 
-	struct albumdetails {
+	struct tracklist {
 		char artist[BUFSIZ];
 		char album[BUFSIZ];
 		char genre[BUFSIZ];
 		int year;
-
 		struct quality {
 			int bitrate;
-			float samplerate;
+			int samplerate;
 			int channels;
 		} q;
 
-		struct tracklist {
-			int track;
-			char title[BUFSIZ];
-			int length;
-			int size;
-		} tl[64];
-	} ad;
+		int track;
+		char title[BUFSIZ];
+		int length;
+		int size;
+	} tl[64];
 
-	memset(&ad, 0, sizeof(ad));
+	memset(&tl, 0, sizeof tl);
 
 	ARGBEGIN {
 	case 'i':
 		utf8flag = false;
+		break;
+	case 's':
+		siunits = true;
 		break;
 	default:
 		usage();
@@ -130,54 +133,58 @@ int main(int argc, char **argv) {
 	for (i = 0; i < argc; i++) {
 		file = taglib_file_new(argv[i]);
 		if (!file) {
-			fprintf(stderr, "Can't open %s\n", argv[i]);
+			fprintf(stderr, "non-audio file: %s\n", argv[i]);
+			argv++;
+			argc--;
+			i--;
 			continue;
 		}
 
 		tag = taglib_file_tag(file);
 		properties = taglib_file_audioproperties(file);
+		if (!tag || !properties) {
+			fprintf(stderr, "Can't read meta-data for %s\n", argv[i]);
+		} else {
+			strlcpy(tl[i].artist, taglib_tag_artist(tag), sizeof tl[i].artist);
+			strlcpy(tl[i].album, taglib_tag_album(tag), sizeof tl[i].album);
+			strlcpy(tl[i].genre, taglib_tag_genre(tag), sizeof tl[i].genre);
+			tl[i].year = taglib_tag_year(tag);
+			tl[i].q.bitrate = taglib_audioproperties_bitrate(properties);
+			tl[i].q.samplerate = taglib_audioproperties_samplerate(properties);
+			tl[i].q.channels = taglib_audioproperties_channels(properties);
 
-		if (tag && properties) {
-			strlcpy(ad.artist, taglib_tag_artist(tag), sizeof ad.artist);
-			strlcpy(ad.album, taglib_tag_album(tag), sizeof ad.album);
-			strlcpy(ad.genre, taglib_tag_genre(tag), sizeof ad.genre);
+			tl[i].track = taglib_tag_track(tag);
+			strlcpy(tl[i].title, taglib_tag_title(tag), sizeof tl[i].title);
+			tl[i].length = taglib_audioproperties_length(properties);
+			tl[i].size = filesize(argv[i]);
 
-			ad.year = taglib_tag_year(tag);
-			if (!ad.q.bitrate)
-				ad.q.bitrate = taglib_audioproperties_bitrate(properties);
-			else
-				ad.q.bitrate += taglib_audioproperties_bitrate(properties);
-				ad.q.bitrate /= 2;
-			ad.q.samplerate = taglib_audioproperties_samplerate(properties) / 1000.0f;
-			ad.q.channels = taglib_audioproperties_channels(properties);
-
-			ad.tl[i].track = taglib_tag_track(tag);
-			strlcpy(ad.tl[i].title, taglib_tag_title(tag), sizeof ad.tl[i].title);
-			ad.tl[i].length = taglib_audioproperties_length(properties);
-			ad.tl[i].size = filesize(argv[i]);
+			avgbitrate += taglib_audioproperties_bitrate(properties);
 		}
 
 		taglib_tag_free_strings();
 		taglib_file_free(file);
 	}
 
-	printf("Artist ....: %s\n", ad.artist);
-	printf("Album .....: %s\n", ad.album);
-	printf("Genre .....: %s\n", ad.genre);
-	printf("Year ......: %d\n", ad.year);
-	printf("Quality ...: %dkbps / %.1fkHz / %d channels\n\n",
-			ad.q.bitrate, ad.q.samplerate, ad.q.channels);
+	avgbitrate /= i;
 
-	for (i = 0; ad.tl[i].title[0]; i++) {
-		totlength += ad.tl[i].length;
-		totsize += ad.tl[i].size;
+	printf("Artist ....: %s\n", tl[0].artist);
+	printf("Album .....: %s\n", tl[0].album);
+	printf("Genre .....: %s\n", tl[0].genre);
+	printf("Year ......: %d\n", tl[0].year);
+	printf("Quality ...: %dkbps / %.1fkHz / %d channels\n\n",
+			avgbitrate, tl[0].q.samplerate / 1000.0f, tl[0].q.channels);
+
+	for (i = 0; tl[i].title[0]; i++) {
+		totlength += tl[i].length;
+		totsize += tl[i].size;
 		printf("%2d. %-56s\t(%d:%02d)\n",
-				ad.tl[i].track, ad.tl[i].title,
-				ad.tl[i].length / 60, ad.tl[i].length % 60);
+				tl[i].track, tl[i].title,
+				tl[i].length / 60, tl[i].length % 60);
 	}
 
 	puts("");
-	printf("Playing time ...: %02d:%02d:%02d\n", totlength / 60 / 60, totlength / 60, totlength % 60);
+	printf("Playing time ...: %02d:%02d:%02d\n",
+			totlength / 60 / 60, totlength / 60, totlength % 60);
 	printf("Total size .....: %s\n", bytestostr(totsize));
 
 	return EXIT_SUCCESS;
