@@ -11,9 +11,25 @@
 #define LEN(x) (sizeof (x) / sizeof *(x))
 
 char *argv0;
-
-bool siunits = false;
 bool utf8flag = true;
+bool siunits = false;
+
+struct tracklist {
+	char artist[BUFSIZ];
+	char album[BUFSIZ];
+	char genre[BUFSIZ];
+	int year;
+	struct quality {
+		int bitrate;
+		int samplerate;
+		int channels;
+	} q;
+
+	int track;
+	char title[BUFSIZ];
+	int length;
+	int size;
+};
 
 void eprintf(const char *fmt, ...) {
 	va_list ap;
@@ -22,6 +38,24 @@ void eprintf(const char *fmt, ...) {
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);
 	exit(EXIT_FAILURE);
+}
+
+void *emalloc(size_t size) {
+	void *p;
+
+	p = malloc(size);
+	if (!p)
+		eprintf("Out of memory\n");
+	return p;
+}
+
+void *erealloc(void *p, size_t size) {
+	void *r;
+
+	r = realloc(p, size);
+	if (!r)
+		eprintf("Out of memory\n");
+	return r;
 }
 
 size_t strlcpy(char *dest, const char *src, size_t size) {
@@ -87,32 +121,14 @@ void usage(void) {
 
 int main(int argc, char **argv) {
 	int i;
-	int j;
 	int totlength = 0;
 	int totsize = 0;
 	int avgbitrate = 0;
+	int tracks = 0;
 	TagLib_File *file;
 	TagLib_Tag *tag;
 	const TagLib_AudioProperties *properties;
-
-	struct tracklist {
-		char artist[BUFSIZ];
-		char album[BUFSIZ];
-		char genre[BUFSIZ];
-		int year;
-		struct quality {
-			int bitrate;
-			int samplerate;
-			int channels;
-		} q;
-
-		int track;
-		char title[BUFSIZ];
-		int length;
-		int size;
-	} tl[64];
-
-	memset(&tl, 0, sizeof tl);
+	struct tracklist *tl;
 
 	ARGBEGIN {
 	case 'i':
@@ -128,6 +144,7 @@ int main(int argc, char **argv) {
 	if (argc < 2)
 		usage();
 
+	tl = emalloc(sizeof(struct tracklist));
 	taglib_set_strings_unicode(utf8flag);
 
 	for (i = 0; i < argc; i++) {
@@ -163,9 +180,12 @@ int main(int argc, char **argv) {
 
 		taglib_tag_free_strings();
 		taglib_file_free(file);
+
+		tl = erealloc(tl, (i + 2) * sizeof(struct tracklist));
 	}
 
-	avgbitrate /= i;
+	tracks = i;
+	avgbitrate /= tracks;
 
 	printf("Artist ....: %s\n", tl[0].artist);
 	printf("Album .....: %s\n", tl[0].album);
@@ -174,7 +194,7 @@ int main(int argc, char **argv) {
 	printf("Quality ...: %dkbps / %.1fkHz / %d channels\n\n",
 			avgbitrate, tl[0].q.samplerate / 1000.0f, tl[0].q.channels);
 
-	for (i = 0; tl[i].title[0]; i++) {
+	for (i = 0; i < tracks; i++) {
 		totlength += tl[i].length;
 		totsize += tl[i].size;
 		printf("%2d. %-56s\t(%d:%02d)\n",
