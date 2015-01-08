@@ -31,6 +31,11 @@ struct tracklist {
 	int size;
 };
 
+struct strcount {
+	char str[BUFSIZ];
+	int count;
+};
+
 void eprintf(const char *fmt, ...) {
 	va_list ap;
 
@@ -119,16 +124,55 @@ void usage(void) {
 			, argv0);
 }
 
+void strcount(struct strcount *str, char *artist) {
+	int j;
+
+	for (j = 0; ; j++) {
+		if (!str[j].str[0]) {
+			strlcpy(str[j].str, artist, sizeof str[j].str);
+			str[j].count++;
+			break;
+		}
+		if (!strncmp(str[j].str, artist, sizeof str[j].str)) {
+			str[j].count++;
+			break;
+		}
+	}
+}
+
+char *mostcommon(struct strcount *str) {
+	int j;
+	int max = 0;
+	char *p;
+
+	for (j = 0; str[j].str[0]; j++)
+		if (str[j].count > max) {
+			max = str[j].count;
+			p = str[j].str;
+		}
+
+	return p;
+}
+
 int main(int argc, char **argv) {
 	int i;
 	int totlength = 0;
 	int totsize = 0;
 	int avgbitrate = 0;
 	int tracks = 0;
+	bool vaflag = false;
 	TagLib_File *file;
 	TagLib_Tag *tag;
 	const TagLib_AudioProperties *properties;
 	struct tracklist *tl;
+
+	struct strcount artists[64];
+	struct strcount albums[64];
+	struct strcount genres[64];
+
+	memset(&artists, 0, sizeof(struct strcount));
+	memset(&albums, 0, sizeof(struct strcount));
+	memset(&genres, 0, sizeof(struct strcount));
 
 	ARGBEGIN {
 	case 'i':
@@ -141,7 +185,7 @@ int main(int argc, char **argv) {
 		usage();
 	} ARGEND;
 
-	if (argc < 2)
+	if (argc < 1)
 		usage();
 
 	tl = emalloc(sizeof(struct tracklist));
@@ -162,6 +206,10 @@ int main(int argc, char **argv) {
 		if (!tag || !properties) {
 			fprintf(stderr, "Can't read meta-data for %s\n", argv[i]);
 		} else {
+			strcount(artists, taglib_tag_artist(tag));
+			strcount(albums, taglib_tag_album(tag));
+			strcount(genres, taglib_tag_genre(tag));
+
 			strlcpy(tl[i].artist, taglib_tag_artist(tag), sizeof tl[i].artist);
 			strlcpy(tl[i].album, taglib_tag_album(tag), sizeof tl[i].album);
 			strlcpy(tl[i].genre, taglib_tag_genre(tag), sizeof tl[i].genre);
@@ -185,11 +233,27 @@ int main(int argc, char **argv) {
 	}
 
 	tracks = i;
+	if (!tracks)
+		eprintf("Couldn't find any audio files\n");
 	avgbitrate /= tracks;
 
-	printf("Artist ....: %s\n", tl[0].artist);
-	printf("Album .....: %s\n", tl[0].album);
-	printf("Genre .....: %s\n", tl[0].genre);
+	int j = 0;
+	int max = 0;
+	char *p = NULL;
+
+	for (j = 0; artists[j].str[0]; j++)
+		if (artists[j].count > max) {
+			max = artists[j].count;
+			p = artists[j].str;
+		}
+	if (j > 3) {
+		vaflag = true;
+		p = "VA";
+	}
+
+	printf("Artist ....: %s\n", p);
+	printf("Album .....: %s\n", mostcommon(albums));
+	printf("Genre .....: %s\n", mostcommon(genres));
 	printf("Year ......: %d\n", tl[0].year);
 	printf("Quality ...: %dkbps / %.1fkHz / %d channels\n\n",
 			avgbitrate, tl[0].q.samplerate / 1000.0f, tl[0].q.channels);
@@ -197,14 +261,19 @@ int main(int argc, char **argv) {
 	for (i = 0; i < tracks; i++) {
 		totlength += tl[i].length;
 		totsize += tl[i].size;
-		printf("%2d. %-56s\t(%d:%02d)\n",
-				tl[i].track, tl[i].title,
-				tl[i].length / 60, tl[i].length % 60);
+		if (vaflag)
+			printf("%2d. %s - %s (%d:%02d)\n",
+					tl[i].track, tl[i].artist, tl[i].title,
+					tl[i].length / 60, tl[i].length % 60);
+		else
+			printf("%2d. %s (%d:%02d)\n",
+					tl[i].track, tl[i].title,
+					tl[i].length / 60, tl[i].length % 60);
 	}
 
 	puts("");
 	printf("Playing time ...: %02d:%02d:%02d\n",
-			totlength / 60 / 60, totlength / 60, totlength % 60);
+			totlength / 60 / 60, totlength / 60 - ((totlength / 60 / 60) * 60), totlength % 60);
 	printf("Total size .....: %s\n", bytestostr(totsize));
 
 	return EXIT_SUCCESS;

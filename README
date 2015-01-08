@@ -1,0 +1,26 @@
+Albumdetails
+------------
+CLI tool to generate details of music album.
+
+Example output
+--------------
+Artist ....: VA
+Album .....: Neuro Squees
+Genre .....: Psytrance
+Year ......: 2014
+Quality ...: 320kbps / 44.1kHz / 2 channels
+
+ 1. Gojja - Tentacles Towards The Sun (5:34)
+ 2. Gubbology - Freestyle (8:14)
+ 3. Katastrof - Beatle 25 (7:12)
+ 4. Oliveira & Myzgon - Off Topic (7:46)
+ 5. Scum Unit - Anti Offline Part 2 (8:34)
+ 6. Calamar Audio - Inverter (7:20)
+ 7. Squees vs Gubbology - Coffeespider (7:29)
+ 8. Bechamel Boyz - Liikaa Loylyy (6:32)
+ 9. Toxic Anger Syndrome - Bergaporten (6:07)
+10. Gubbology - Sekt (8:11)
+11. Trance-Ingvars - Anuminaki (5:15)
+
+Playing time ...: 01:18:14
+Total size .....: 180.95 MiB
