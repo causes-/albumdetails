@@ -20,6 +20,12 @@ struct tracklist {
 	int length;
 	int size;
 	char *artist;
+	char *album;
+	char *genre;
+	int year;
+	int samplerate;
+	int channels;
+
 	struct tracks {
 		char artist[BUFSIZ];
 		char album[BUFSIZ];
@@ -36,6 +42,11 @@ struct tracklist {
 		int length;
 		int size;
 	} *t;
+};
+
+struct intcount {
+	int number;
+	int count;
 };
 
 struct strcount {
@@ -190,6 +201,22 @@ struct tracklist *readfiles(struct tracklist *tl, char **argv, int argc) {
 	return tl;
 }
 
+void intcount(struct intcount *intc, int number) {
+	int j;
+
+	for (j = 0; ; j++) {
+		if (!intc[j].number) {
+			intc[j].number = number;
+			intc[j].count++;
+			break;
+		}
+		if (intc[j].number == number) {
+			intc[j].count++;
+			break;
+		}
+	}
+}
+
 void strcount(struct strcount *str, char *token) {
 	int j;
 
@@ -223,13 +250,35 @@ char *mostcommon(struct strcount *str, bool artist) {
 	return p;
 }
 
+int intmostcommon(struct intcount *intc) {
+	int j;
+	int max = 0;
+	int retval;
+
+	for (j = 0; intc[j].number; j++)
+		if (intc[j].count > max) {
+			max = intc[j].count;
+			retval = intc[j].number;
+		}
+
+	return retval;
+}
+
 struct tracklist *getaverages(struct tracklist *tl) {
 	int i;
-	int max = 0;
-	int j;
-
 	struct strcount artists[64];
+	struct strcount albums[64];
+	struct strcount genres[64];
+	struct intcount years[64];
+	struct intcount samplerates[64];
+	struct intcount channels[64];
+
 	memset(&artists, 0, sizeof artists);
+	memset(&albums, 0, sizeof albums);
+	memset(&genres, 0, sizeof genres);
+	memset(&years, 0, sizeof years);
+	memset(&samplerates, 0, sizeof samplerates);
+	memset(&channels, 0, sizeof channels);
 
 	tl->avgbitrate = 0;
 	tl->length = 0;
@@ -241,10 +290,20 @@ struct tracklist *getaverages(struct tracklist *tl) {
 		tl->avgbitrate += tl->t[i].q.bitrate;
 
 		strcount(artists, tl->t[i].artist);
+		strcount(albums, tl->t[i].album);
+		strcount(genres, tl->t[i].genre);
+		intcount(years, tl->t[i].year);
+		intcount(samplerates, tl->t[i].q.samplerate);
+		intcount(channels, tl->t[i].q.channels);
 	}
 
 	tl->avgbitrate /= tl->tracks;
 	tl->artist = mostcommon(artists, true);
+	tl->album = mostcommon(albums, true);
+	tl->genre = mostcommon(genres, true);
+	tl->year = intmostcommon(years);
+	tl->samplerate = intmostcommon(samplerates);
+	tl->channels = intmostcommon(channels);
 
 	return tl;
 }
@@ -285,11 +344,11 @@ int main(int argc, char **argv) {
 	tl = getaverages(tl);
 
 	printf("Artist ....: %s\n", tl->artist);
-	printf("Album .....: %s\n", tl->t[0].album);
-	printf("Genre .....: %s\n", tl->t[0].genre);
-	printf("Year ......: %d\n", tl->t[0].year);
+	printf("Album .....: %s\n", tl->album);
+	printf("Genre .....: %s\n", tl->genre);
+	printf("Year ......: %d\n", tl->year);
 	printf("Quality ...: %dkbps / %.1fkHz / %d channels\n\n",
-			tl->t[0].q.bitrate, tl->t[0].q.samplerate / 1000.0f, tl->t[0].q.channels);
+			tl->avgbitrate, tl->samplerate / 1000.0f, tl->channels);
 
 	for (i = 0; i < tl->tracks; i++) {
 		if (!strncmp(tl->artist, "VA", 3))
