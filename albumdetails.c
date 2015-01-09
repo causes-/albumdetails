@@ -16,27 +16,23 @@ bool siunits = false;
 
 struct tracklist {
 	int tracks;
-	int avgbitrate;
-	int length;
-	int size;
 	char *artist;
 	char *album;
 	char *genre;
 	int year;
+	int avgbitrate;
 	int samplerate;
 	int channels;
-
+	int length;
+	int size;
 	struct tracks {
 		char artist[BUFSIZ];
 		char album[BUFSIZ];
 		char genre[BUFSIZ];
 		int year;
-		struct quality {
-			int bitrate;
-			int samplerate;
-			int channels;
-		} q;
-
+		int bitrate;
+		int samplerate;
+		int channels;
 		int track;
 		char title[BUFSIZ];
 		int length;
@@ -173,9 +169,9 @@ struct tracklist *readfiles(struct tracklist *tl, char **argv, int argc) {
 			strlcpy(tl->t[tl->tracks].album, taglib_tag_album(tag), sizeof tl->t[tl->tracks].album);
 			strlcpy(tl->t[tl->tracks].genre, taglib_tag_genre(tag), sizeof tl->t[tl->tracks].genre);
 			tl->t[tl->tracks].year = taglib_tag_year(tag);
-			tl->t[tl->tracks].q.bitrate = taglib_audioproperties_bitrate(properties);
-			tl->t[tl->tracks].q.samplerate = taglib_audioproperties_samplerate(properties);
-			tl->t[tl->tracks].q.channels = taglib_audioproperties_channels(properties);
+			tl->t[tl->tracks].bitrate = taglib_audioproperties_bitrate(properties);
+			tl->t[tl->tracks].samplerate = taglib_audioproperties_samplerate(properties);
+			tl->t[tl->tracks].channels = taglib_audioproperties_channels(properties);
 
 			tl->t[tl->tracks].track = taglib_tag_track(tag);
 			strlcpy(tl->t[tl->tracks].title, taglib_tag_title(tag), sizeof tl->t[tl->tracks].title);
@@ -199,17 +195,16 @@ struct tracklist *readfiles(struct tracklist *tl, char **argv, int argc) {
 void intcount(struct intcount *intc, int number) {
 	int j;
 
-	for (j = 0; ; j++) {
-		if (!intc[j].number) {
-			intc[j].number = number;
-			intc[j].count++;
-			break;
-		}
+	for (j = 0; intc[j].number ; j++) {
 		if (intc[j].number == number) {
 			intc[j].count++;
-			break;
+			return;
 		}
 	}
+
+	intc[j+1].number = 0;
+	intc[j].number = number;
+	intc[j].count++;
 }
 
 int intmostcommon(struct intcount *intc) {
@@ -229,17 +224,15 @@ int intmostcommon(struct intcount *intc) {
 void strcount(struct strcount *strc, char *token) {
 	int j;
 
-	for (j = 0; ; j++) {
-		if (!strc[j].str[0]) {
-			strlcpy(strc[j].str, token, sizeof strc[j].str);
-			strc[j].count++;
-			break;
-		}
+	for (j = 0; strc[j].str[0]; j++)
 		if (!strncmp(strc[j].str, token, sizeof strc[j].str)) {
 			strc[j].count++;
-			break;
+			return;
 		}
-	}
+
+	strc[j+1].str[0] = '\0';
+	strlcpy(strc[j].str, token, sizeof strc[j].str);
+	strc[j].count++;
 }
 
 char *strmostcommon(struct strcount *str, bool artist) {
@@ -268,13 +261,6 @@ struct tracklist *getaverages(struct tracklist *tl) {
 	struct intcount samplerates[64];
 	struct intcount channels[64];
 
-	memset(&artists, 0, sizeof artists);
-	memset(&albums, 0, sizeof albums);
-	memset(&genres, 0, sizeof genres);
-	memset(&years, 0, sizeof years);
-	memset(&samplerates, 0, sizeof samplerates);
-	memset(&channels, 0, sizeof channels);
-
 	tl->avgbitrate = 0;
 	tl->length = 0;
 	tl->size = 0;
@@ -282,14 +268,14 @@ struct tracklist *getaverages(struct tracklist *tl) {
 	for (i = 0; i < tl->tracks; i++) {
 		tl->length += tl->t[i].length;
 		tl->size += tl->t[i].size;
-		tl->avgbitrate += tl->t[i].q.bitrate;
+		tl->avgbitrate += tl->t[i].bitrate;
 
 		strcount(artists, tl->t[i].artist);
 		strcount(albums, tl->t[i].album);
 		strcount(genres, tl->t[i].genre);
 		intcount(years, tl->t[i].year);
-		intcount(samplerates, tl->t[i].q.samplerate);
-		intcount(channels, tl->t[i].q.channels);
+		intcount(samplerates, tl->t[i].samplerate);
+		intcount(channels, tl->t[i].channels);
 	}
 
 	tl->avgbitrate /= tl->tracks;
