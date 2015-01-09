@@ -2,6 +2,13 @@ Albumdetails
 ------------
 CLI tool to generate details of music album.
 
+Features
+--------
+* Print formatted stats.
+* Detect if album is compilation.
+* Show average bitrate of all songs.
+* Show the most commonly used value of all songs.
+
 Example output
 --------------
 Artist ....: VA
