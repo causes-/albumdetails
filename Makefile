@@ -1,4 +1,4 @@
-CFLAGS+=-std=c99
+CFLAGS+=-std=c99 -g -Wall
 LDLIBS=-I/usr/include/taglib -ltag_c
 PREFIX=/usr/local
 
