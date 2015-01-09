@@ -68,6 +68,15 @@ void *emalloc(size_t size) {
 	return p;
 }
 
+void *ecalloc(size_t nmemb, size_t size) {
+	void *p;
+
+	p = calloc(nmemb, size);
+	if (!p)
+		eprintf("Out of memory\n");
+	return p;
+}
+
 void *erealloc(void *p, size_t size) {
 	void *r;
 
@@ -110,9 +119,9 @@ char *secondstostr(int seconds) {
 	s = seconds % 60;
 
 	if (h)
-		snprintf(buf, sizeof(buf), "%02d:%02d:%02d", h, m, s);
+		snprintf(buf, sizeof buf, "%02d:%02d:%02d", h, m, s);
 	else
-		snprintf(buf, sizeof(buf), "%02d:%02d", m, s);
+		snprintf(buf, sizeof buf, "%02d:%02d", m, s);
 
 	return buf;
 }
@@ -120,7 +129,7 @@ char *secondstostr(int seconds) {
 char *bytestostr(double bytes) {
 	int i;
 	int cols;
-	static char str[32];
+	static char buf[32];
 	static const char iec[][4] = { "B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB" };
 	static const char si[][3] = { "B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
 	const char *unit;
@@ -140,12 +149,12 @@ char *bytestostr(double bytes) {
 
 	fmt = i ? "%.2f %s" : "%.0f %s";
 	unit = siunits ? si[i] : iec[i];
-	snprintf(str, sizeof(str), fmt, bytes, unit);
+	snprintf(buf, sizeof buf, fmt, bytes, unit);
 
-	return str;
+	return buf;
 }
 
-struct tracklist *readfiles(struct tracklist *tl, char **argv, int argc) {
+void readfiles(struct tracklist *tl, char **filenames, int n) {
 	int i;
 	TagLib_File *file;
 	TagLib_Tag *tag;
@@ -153,17 +162,17 @@ struct tracklist *readfiles(struct tracklist *tl, char **argv, int argc) {
 
 	tl->tracks = 0;
 
-	for (i = 0; i < argc; i++) {
-		file = taglib_file_new(argv[i]);
+	for (i = 0; i < n; i++) {
+		file = taglib_file_new(filenames[i]);
 		if (!file) {
-			fprintf(stderr, "non-audio file: %s\n", argv[i]);
+			fprintf(stderr, "non-audio file: %s\n", filenames[i]);
 			continue;
 		}
 
 		tag = taglib_file_tag(file);
 		properties = taglib_file_audioproperties(file);
 		if (!tag || !properties) {
-			fprintf(stderr, "Can't read meta-data for %s\n", argv[i]);
+			fprintf(stderr, "Can't read meta-data for %s\n", filenames[i]);
 		} else {
 			strlcpy(tl->t[tl->tracks].artist, taglib_tag_artist(tag), sizeof tl->t[tl->tracks].artist);
 			strlcpy(tl->t[tl->tracks].album, taglib_tag_album(tag), sizeof tl->t[tl->tracks].album);
@@ -176,7 +185,7 @@ struct tracklist *readfiles(struct tracklist *tl, char **argv, int argc) {
 			tl->t[tl->tracks].track = taglib_tag_track(tag);
 			strlcpy(tl->t[tl->tracks].title, taglib_tag_title(tag), sizeof tl->t[tl->tracks].title);
 			tl->t[tl->tracks].length = taglib_audioproperties_length(properties);
-			tl->t[tl->tracks].size = filesize(argv[i]);
+			tl->t[tl->tracks].size = filesize(filenames[i]);
 
 			tl->tracks++;
 		}
@@ -189,22 +198,24 @@ struct tracklist *readfiles(struct tracklist *tl, char **argv, int argc) {
 
 	if (!tl->tracks)
 		eprintf("Couldn't find any audio files\n");
-	return tl;
 }
 
-void intcount(struct intcount *intc, int number) {
+struct intcount *intcount(struct intcount *intc, int number) {
 	int j;
 
-	for (j = 0; intc[j].number ; j++) {
+	for (j = 0; intc[j].number; j++)
 		if (intc[j].number == number) {
 			intc[j].count++;
-			return;
+			return intc;
 		}
-	}
 
-	intc[j+1].number = 0;
 	intc[j].number = number;
 	intc[j].count++;
+	if (j)
+		intc = erealloc(intc, (j + 2) * sizeof(struct intcount));
+	intc[j+1].number = 0;
+	intc[j+1].count = 0;
+	return intc;
 }
 
 int intmostcommon(struct intcount *intc) {
@@ -221,18 +232,22 @@ int intmostcommon(struct intcount *intc) {
 	return retval;
 }
 
-void strcount(struct strcount *strc, char *token) {
+struct strcount *strcount(struct strcount *strc, char *token) {
 	int j;
 
 	for (j = 0; strc[j].str[0]; j++)
 		if (!strncmp(strc[j].str, token, sizeof strc[j].str)) {
 			strc[j].count++;
-			return;
+			return strc;
 		}
 
-	strc[j+1].str[0] = '\0';
 	strlcpy(strc[j].str, token, sizeof strc[j].str);
 	strc[j].count++;
+	if (j)
+		strc = erealloc(strc, (j + 2) * sizeof(struct strcount));
+	strc[j+1].str[0] = '\0';
+	strc[j+1].count = 0;
+	return strc;
 }
 
 char *strmostcommon(struct strcount *str, bool artist) {
@@ -246,20 +261,27 @@ char *strmostcommon(struct strcount *str, bool artist) {
 			p = str[j].str;
 		}
 
-	if (j > 3 && artist)
+	if (artist && j > 3)
 		p = "VA";
 
 	return p;
 }
 
-struct tracklist *getaverages(struct tracklist *tl) {
+void getaverages(struct tracklist *tl) {
 	int i;
-	struct strcount artists[64];
-	struct strcount albums[64];
-	struct strcount genres[64];
-	struct intcount years[64];
-	struct intcount samplerates[64];
-	struct intcount channels[64];
+	struct strcount *artists;
+	struct strcount *albums;
+	struct strcount *genres;
+	struct intcount *years;
+	struct intcount *samplerates;
+	struct intcount *channels;
+
+	artists = ecalloc(2, sizeof(struct strcount));
+	albums = ecalloc(2, sizeof(struct strcount));
+	genres = ecalloc(2, sizeof(struct strcount));
+	years = ecalloc(2, sizeof(struct intcount));
+	samplerates = ecalloc(2, sizeof(struct intcount));
+	channels = ecalloc(2, sizeof(struct intcount));
 
 	tl->avgbitrate = 0;
 	tl->length = 0;
@@ -270,12 +292,12 @@ struct tracklist *getaverages(struct tracklist *tl) {
 		tl->size += tl->t[i].size;
 		tl->avgbitrate += tl->t[i].bitrate;
 
-		strcount(artists, tl->t[i].artist);
-		strcount(albums, tl->t[i].album);
-		strcount(genres, tl->t[i].genre);
-		intcount(years, tl->t[i].year);
-		intcount(samplerates, tl->t[i].samplerate);
-		intcount(channels, tl->t[i].channels);
+		artists = strcount(artists, tl->t[i].artist);
+		albums = strcount(albums, tl->t[i].album);
+		genres = strcount(genres, tl->t[i].genre);
+		years = intcount(years, tl->t[i].year);
+		samplerates = intcount(samplerates, tl->t[i].samplerate);
+		channels = intcount(channels, tl->t[i].channels);
 	}
 
 	tl->avgbitrate /= tl->tracks;
@@ -285,18 +307,16 @@ struct tracklist *getaverages(struct tracklist *tl) {
 	tl->year = intmostcommon(years);
 	tl->samplerate = intmostcommon(samplerates);
 	tl->channels = intmostcommon(channels);
-
-	return tl;
 }
 
 void printdetails(struct tracklist *tl) {
 	int i;
 
-	printf("Artist ....: %s\n", tl->artist);
-	printf("Album .....: %s\n", tl->album);
-	printf("Genre .....: %s\n", tl->genre);
-	printf("Year ......: %d\n", tl->year);
-	printf("Quality ...: %dkbps / %.1fkHz / %d channels\n\n",
+	printf("Artist: %s\n", tl->artist);
+	printf("Album: %s\n", tl->album);
+	printf("Genre: %s\n", tl->genre);
+	printf("Year: %d\n", tl->year);
+	printf("Quality: %dkbps / %.1fkHz / %d channels\n\n",
 			tl->avgbitrate, tl->samplerate / 1000.0f, tl->channels);
 
 	for (i = 0; i < tl->tracks; i++)
@@ -308,8 +328,8 @@ void printdetails(struct tracklist *tl) {
 					tl->t[i].track, tl->t[i].title, secondstostr(tl->t[i].length));
 
 	printf("\n");
-	printf("Playing time ...: %s\n", secondstostr(tl->length));
-	printf("Total size .....: %s\n", bytestostr(tl->size));
+	printf("Playing time: %s\n", secondstostr(tl->length));
+	printf("Total size: %s\n", bytestostr(tl->size));
 }
 
 void usage(void) {
@@ -343,9 +363,9 @@ int main(int argc, char **argv) {
 	tl = emalloc(sizeof(struct tracklist));
 	tl->t = emalloc(sizeof(struct tracks));
 
-	tl = readfiles(tl, argv, argc);
+	readfiles(tl, argv, argc);
 
-	tl = getaverages(tl);
+	getaverages(tl);
 
 	printdetails(tl);
 
