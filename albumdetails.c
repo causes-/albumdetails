@@ -200,68 +200,66 @@ void readfiles(struct tracklist *tl, char **filenames, int n) {
 		eprintf("Couldn't find any audio files\n");
 }
 
-struct intcount *intcount(struct intcount *intc, int number) {
-	int j;
+void intcount(struct intcount **intc, int number) {
+	int i;
 
-	for (j = 0; intc[j].number; j++)
-		if (intc[j].number == number) {
-			intc[j].count++;
-			return intc;
+	for (i = 0; intc[i]->number; i++)
+		if (intc[i]->number == number) {
+			intc[i]->count++;
+			return;
 		}
 
-	intc[j].number = number;
-	intc[j].count++;
-	if (j)
-		intc = erealloc(intc, (j + 2) * sizeof(struct intcount));
-	intc[j+1].number = 0;
-	intc[j+1].count = 0;
-	return intc;
+	intc[i]->number = number;
+	intc[i]->count++;
+	if (i)
+		*intc = erealloc(*intc, (i + 2) * sizeof(struct intcount));
+	intc[i+1]->number = 0;
+	intc[i+1]->count = 0;
 }
 
 int intmostcommon(struct intcount *intc) {
-	int j;
+	int i;
 	int max = 0;
 	int retval;
 
-	for (j = 0; intc[j].number; j++)
-		if (intc[j].count > max) {
-			max = intc[j].count;
-			retval = intc[j].number;
+	for (i = 0; intc[i].number; i++)
+		if (intc[i].count > max) {
+			max = intc[i].count;
+			retval = intc[i].number;
 		}
 
 	return retval;
 }
 
-struct strcount *strcount(struct strcount *strc, char *token) {
-	int j;
+void strcount(struct strcount **strc, char *token) {
+	int i;
 
-	for (j = 0; strc[j].str[0]; j++)
-		if (!strncmp(strc[j].str, token, sizeof strc[j].str)) {
-			strc[j].count++;
-			return strc;
+	for (i = 0; (*strc)[i].str[0]; i++)
+		if (!strncmp((*strc)[i].str, token, sizeof (*strc)[i].str)) {
+			(*strc)[i].count++;
+			return;
 		}
 
-	strlcpy(strc[j].str, token, sizeof strc[j].str);
-	strc[j].count++;
-	if (j)
-		strc = erealloc(strc, (j + 2) * sizeof(struct strcount));
-	strc[j+1].str[0] = '\0';
-	strc[j+1].count = 0;
-	return strc;
+	strlcpy((*strc)[i].str, token, sizeof (*strc)[i].str);
+	(*strc)[i].count++;
+	if (i)
+		*strc = erealloc(*strc, (i + 2) * sizeof(struct strcount));
+	(*strc)[i+1].str[0] = '\0';
+	(*strc)[i+1].count = 0;
 }
 
 char *strmostcommon(struct strcount *str, bool artist) {
-	int j;
+	int i;
 	int max = 0;
 	char *p;
 
-	for (j = 0; str[j].str[0]; j++)
-		if (str[j].count > max) {
-			max = str[j].count;
-			p = str[j].str;
+	for (i = 0; str[i].str[0]; i++)
+		if (str[i].count > max) {
+			max = str[i].count;
+			p = str[i].str;
 		}
 
-	if (artist && j > 3)
+	if (artist && i > 3)
 		p = "VA";
 
 	return p;
@@ -292,12 +290,12 @@ void getaverages(struct tracklist *tl) {
 		tl->size += tl->t[i].size;
 		tl->avgbitrate += tl->t[i].bitrate;
 
-		artists = strcount(artists, tl->t[i].artist);
-		albums = strcount(albums, tl->t[i].album);
-		genres = strcount(genres, tl->t[i].genre);
-		years = intcount(years, tl->t[i].year);
-		samplerates = intcount(samplerates, tl->t[i].samplerate);
-		channels = intcount(channels, tl->t[i].channels);
+		strcount(&artists, tl->t[i].artist);
+		strcount(&albums, tl->t[i].album);
+		strcount(&genres, tl->t[i].genre);
+		intcount(&years, tl->t[i].year);
+		intcount(&samplerates, tl->t[i].samplerate);
+		intcount(&channels, tl->t[i].channels);
 	}
 
 	tl->avgbitrate /= tl->tracks;
