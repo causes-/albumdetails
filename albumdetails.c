@@ -340,7 +340,7 @@ void usage(void) {
 }
 
 int main(int argc, char **argv) {
-	struct tracklist *tl;
+	struct tracklist tl;
 
 	ARGBEGIN {
 	case 'i':
@@ -358,14 +358,13 @@ int main(int argc, char **argv) {
 
 	taglib_set_strings_unicode(utf8flag);
 
-	tl = emalloc(sizeof(struct tracklist));
-	tl->t = emalloc(sizeof(struct tracks));
+	tl.t = emalloc(sizeof(struct tracks));
 
-	readfiles(tl, argv, argc);
+	readfiles(&tl, argv, argc);
 
-	getaverages(tl);
+	getaverages(&tl);
 
-	printdetails(tl);
+	printdetails(&tl);
 
 	return EXIT_SUCCESS;
 }
