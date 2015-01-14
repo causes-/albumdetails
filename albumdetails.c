@@ -203,18 +203,18 @@ void readfiles(struct tracklist *tl, char **filenames, int n) {
 void intcount(struct intcount **intc, int number) {
 	int i;
 
-	for (i = 0; intc[i]->number; i++)
-		if (intc[i]->number == number) {
-			intc[i]->count++;
+	for (i = 0; (*intc)[i].number; i++)
+		if ((*intc)[i].number == number) {
+			(*intc)[i].count++;
 			return;
 		}
 
-	intc[i]->number = number;
-	intc[i]->count++;
+	(*intc)[i].number = number;
+	(*intc)[i].count++;
 	if (i)
 		*intc = erealloc(*intc, (i + 2) * sizeof(struct intcount));
-	intc[i+1]->number = 0;
-	intc[i+1]->count = 0;
+	(*intc)[i+1].number = 0;
+	(*intc)[i+1].count = 0;
 }
 
 int intmostcommon(struct intcount *intc) {
