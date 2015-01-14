@@ -220,7 +220,7 @@ void intcount(struct intcount **intc, int number) {
 int intmostcommon(struct intcount *intc) {
 	int i;
 	int max = 0;
-	int retval;
+	int retval = 0;
 
 	for (i = 0; intc[i].number; i++)
 		if (intc[i].count > max) {
@@ -251,7 +251,7 @@ void strcount(struct strcount **strc, char *token) {
 char *strmostcommon(struct strcount *str, bool artist) {
 	int i;
 	int max = 0;
-	char *p;
+	char *p = NULL;
 
 	for (i = 0; str[i].str[0]; i++)
 		if (str[i].count > max) {
