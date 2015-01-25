@@ -103,14 +103,12 @@ char *bytestostr(double bytes) {
 }
 
 void readfiles(struct tracklist *tl, char **filenames, int n) {
-	int i;
+	int i, j;
 	TagLib_File *file;
 	TagLib_Tag *tag;
 	const TagLib_AudioProperties *properties;
 
-	tl->tracks = 0;
-
-	for (i = 0; i < n; i++) {
+	for (i = 0, j = 0; i < n; i++) {
 		file = taglib_file_new(filenames[i]);
 		if (!file) {
 			fprintf(stderr, "non-audio file: %s\n", filenames[i]);
@@ -122,30 +120,31 @@ void readfiles(struct tracklist *tl, char **filenames, int n) {
 		if (!tag || !properties) {
 			fprintf(stderr, "Can't read meta-data for %s\n", filenames[i]);
 		} else {
-			strlcpy(tl->t[tl->tracks].artist, taglib_tag_artist(tag), sizeof tl->t[tl->tracks].artist);
-			strlcpy(tl->t[tl->tracks].album, taglib_tag_album(tag), sizeof tl->t[tl->tracks].album);
-			strlcpy(tl->t[tl->tracks].genre, taglib_tag_genre(tag), sizeof tl->t[tl->tracks].genre);
-			tl->t[tl->tracks].year = taglib_tag_year(tag);
-			tl->t[tl->tracks].bitrate = taglib_audioproperties_bitrate(properties);
-			tl->t[tl->tracks].samplerate = taglib_audioproperties_samplerate(properties);
-			tl->t[tl->tracks].channels = taglib_audioproperties_channels(properties);
+			strlcpy(tl->t[j].artist, taglib_tag_artist(tag), sizeof tl->t[j].artist);
+			strlcpy(tl->t[j].album, taglib_tag_album(tag), sizeof tl->t[j].album);
+			strlcpy(tl->t[j].genre, taglib_tag_genre(tag), sizeof tl->t[j].genre);
+			tl->t[j].year = taglib_tag_year(tag);
+			tl->t[j].bitrate = taglib_audioproperties_bitrate(properties);
+			tl->t[j].samplerate = taglib_audioproperties_samplerate(properties);
+			tl->t[j].channels = taglib_audioproperties_channels(properties);
 
-			tl->t[tl->tracks].track = taglib_tag_track(tag);
-			strlcpy(tl->t[tl->tracks].title, taglib_tag_title(tag), sizeof tl->t[tl->tracks].title);
-			tl->t[tl->tracks].length = taglib_audioproperties_length(properties);
-			tl->t[tl->tracks].size = filesize(filenames[i]);
+			tl->t[j].track = taglib_tag_track(tag);
+			strlcpy(tl->t[j].title, taglib_tag_title(tag), sizeof tl->t[j].title);
+			tl->t[j].length = taglib_audioproperties_length(properties);
+			tl->t[j].size = filesize(filenames[i]);
 
-			tl->tracks++;
+			j++;
 		}
 
 		taglib_tag_free_strings();
 		taglib_file_free(file);
 
-		tl->t = erealloc(tl->t, (tl->tracks + 2) * sizeof(struct tracks));
+		tl->t = erealloc(tl->t, (j + 2) * sizeof(struct tracks));
 	}
 
-	if (!tl->tracks)
+	if (!j)
 		eprintf("Couldn't find any audio files\n");
+	tl->tracks = j;
 }
 
 void intcount(struct intcount **intc, int number) {
