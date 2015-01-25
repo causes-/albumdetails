@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 
 #include "arg.h"
+#include "util.h"
 
 #define LEN(x) (sizeof (x) / sizeof *(x))
 
@@ -49,59 +50,6 @@ struct strcount {
 	char str[BUFSIZ];
 	int count;
 };
-
-void eprintf(const char *fmt, ...) {
-	va_list ap;
-
-	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
-	va_end(ap);
-	exit(EXIT_FAILURE);
-}
-
-void *emalloc(size_t size) {
-	void *p;
-
-	p = malloc(size);
-	if (!p)
-		eprintf("Out of memory\n");
-	return p;
-}
-
-void *ecalloc(size_t nmemb, size_t size) {
-	void *p;
-
-	p = calloc(nmemb, size);
-	if (!p)
-		eprintf("Out of memory\n");
-	return p;
-}
-
-void *erealloc(void *p, size_t size) {
-	void *r;
-
-	r = realloc(p, size);
-	if (!r)
-		eprintf("Out of memory\n");
-	return r;
-}
-
-size_t strlcpy(char *dest, const char *src, size_t size) {
-	size_t len;
-
-	len = strlen(src);
-
-	if (size) {
-		if (len >= size)
-			size -= 1;
-		else
-			size = len;
-		strncpy(dest, src, size);
-		dest[size] = '\0';
-	}
-
-	return size;
-}
 
 int filesize(char *filename) {
 	struct stat st;

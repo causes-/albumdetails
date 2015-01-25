@@ -3,8 +3,11 @@ LDLIBS=-I/usr/include/taglib -ltag_c
 PREFIX=/usr/local
 
 BIN=albumdetails
+OBJ=util.o
 
 all: $(BIN)
+
+$(BIN): $(OBJ)
 
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
