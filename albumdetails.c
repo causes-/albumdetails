@@ -147,38 +147,40 @@ int readfiles(struct tracks **t, char **files, int nfiles) {
 	return j;
 }
 
-void strcount(struct strcount **strc, char *token) {
-	int i;
+char *strcount(char *p, int len, bool artist) {
+	int i, j;
+	int max;
+	struct strcount *strc = ecalloc(2, sizeof(struct strcount));
+	char *ret;
 
-	for (i = 0; (*strc)[i].str; i++)
-		if (!strcmp((*strc)[i].str, token)) {
-			(*strc)[i].count++;
-			return;
+	// calculate occurence count for each str
+	for (i = 0; i < len; i++) {
+		for (j = 0; strc[j].str; j++)
+			if (!strcmp(strc[j].str, p)) {
+				strc[j].count++;
+				break;
+			}
+
+		strc[j].str = p;
+		strc[j].count = 1;
+		if (j)
+			strc = erealloc(strc, (j + 2) * sizeof(struct strcount));
+		strc[j+1].str = NULL;
+
+		p += sizeof(struct tracks); 
+	}
+
+	// find most common str
+	for (i = 0, max = 0; strc[i].str; i++)
+		if (strc[i].count > max) {
+			max = strc[i].count;
+			ret = strc[i].str;
 		}
-
-	(*strc)[i].str = token;
-	(*strc)[i].count++;
-	if (i)
-		*strc = erealloc(*strc, (i + 2) * sizeof(struct strcount));
-	(*strc)[i+1].str = NULL;
-	(*strc)[i+1].count = 0;
-}
-
-char *strmostcommon(struct strcount *str, bool artist) {
-	int i;
-	int max = 0;
-	char *p = NULL;
-
-	for (i = 0; str[i].str; i++)
-		if (str[i].count > max) {
-			max = str[i].count;
-			p = str[i].str;
-		}
-
 	if (artist && i > 3)
-		p = "VA";
+		ret = "VA";
 
-	return p;
+	free(strc);
+	return ret;
 }
 
 void intcount(struct intcount **intc, int number) {
@@ -191,11 +193,10 @@ void intcount(struct intcount **intc, int number) {
 		}
 
 	(*intc)[i].number = number;
-	(*intc)[i].count++;
+	(*intc)[i].count = 1;
 	if (i)
 		*intc = erealloc(*intc, (i + 2) * sizeof(struct intcount));
 	(*intc)[i+1].number = 0;
-	(*intc)[i+1].count = 0;
 }
 
 int intmostcommon(struct intcount *intc) {
@@ -212,53 +213,39 @@ int intmostcommon(struct intcount *intc) {
 	return retval;
 }
 
+int icount(int *p, int len) {
+	int i, j;
+	int ret;
+	struct intcount *intc = ecalloc(2, sizeof(struct intcount));
+
+	for (i = 0; i < len; i++) {
+		printf("%d\n", *p);
+		intcount(&intc, *p);
+		p += sizeof(struct tracks);
+	}
+
+	ret = intmostcommon(intc);
+	free(intc);
+	return ret;
+}
+
 void getaverages(struct albumdetails *ad, struct tracks *t) {
 	int i;
-	struct strcount *artists;
-	struct strcount *albums;
-	struct strcount *genres;
-	struct intcount *years;
-	struct intcount *samplerates;
-	struct intcount *channels;
-
-	artists = ecalloc(2, sizeof(struct strcount));
-	albums = ecalloc(2, sizeof(struct strcount));
-	genres = ecalloc(2, sizeof(struct strcount));
-	years = ecalloc(2, sizeof(struct intcount));
-	samplerates = ecalloc(2, sizeof(struct intcount));
-	channels = ecalloc(2, sizeof(struct intcount));
-
-	ad->avgbitrate = 0;
-	ad->length = 0;
-	ad->size = 0;
 
 	for (i = 0; i < ad->tracks; i++) {
 		ad->length += t[i].length;
 		ad->size += t[i].size;
 		ad->avgbitrate += t[i].bitrate;
-
-		strcount(&artists, t[i].artist);
-		strcount(&albums, t[i].album);
-		strcount(&genres, t[i].genre);
-		intcount(&years, t[i].year);
-		intcount(&samplerates, t[i].samplerate);
-		intcount(&channels, t[i].channels);
 	}
 
 	ad->avgbitrate /= ad->tracks;
-	ad->artist = strmostcommon(artists, true);
-	ad->album = strmostcommon(albums, false);
-	ad->genre = strmostcommon(genres, false);
-	ad->year = intmostcommon(years);
-	ad->samplerate = intmostcommon(samplerates);
-	ad->channels = intmostcommon(channels);
 
-	free(artists);
-	free(albums);
-	free(genres);
-	free(years);
-	free(samplerates);
-	free(channels);
+	ad->artist = strcount(t[0].artist, ad->tracks, true);
+	ad->album = strcount(t[0].album, ad->tracks, false);
+	ad->genre = strcount(t[0].genre, ad->tracks, false);
+	ad->year = icount(&t[0].year, ad->tracks);
+	ad->samplerate = icount(&t[0].samplerate, ad->tracks);
+	ad->channels = icount(&t[0].channels, ad->tracks);
 }
 
 void printdetails(struct albumdetails *ad, struct tracks *t) {
@@ -311,6 +298,7 @@ int main(int argc, char **argv) {
 	if (argc < 1)
 		usage();
 
+	memset(&ad, 0, sizeof ad);
 	t = emalloc(sizeof(struct tracks));
 
 	taglib_set_strings_unicode(utf8flag);
