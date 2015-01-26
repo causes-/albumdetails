@@ -215,7 +215,7 @@ int intcount(int *p, int len) {
 	return ret;
 }
 
-void getaverages(struct albumdetails *ad, struct tracks *t) {
+void getalbumdetails(struct albumdetails *ad, struct tracks *t) {
 	int i;
 
 	for (i = 0; i < ad->tracks; i++) {
@@ -245,7 +245,7 @@ void printdetails(struct albumdetails *ad, struct tracks *t) {
 			ad->avgbitrate, ad->samplerate / 1000.0f, ad->channels);
 
 	for (i = 0; i < ad->tracks; i++)
-		if (!strncmp(ad->artist, "VA", 2))
+		if (!strcmp(ad->artist, "VA"))
 			printf("%2d. %s - %s (%s)\n",
 					t[i].track, t[i].artist, t[i].title, secondstostr(t[i].length));
 		else
@@ -291,7 +291,7 @@ int main(int argc, char **argv) {
 
 	ad.tracks = readfiles(&t, argv, argc);
 
-	getaverages(&ad, t);
+	getalbumdetails(&ad, t);
 
 	printdetails(&ad, t);
 
