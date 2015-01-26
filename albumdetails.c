@@ -183,48 +183,34 @@ char *strcount(char *p, int len, bool artist) {
 	return ret;
 }
 
-void intcount(struct intcount **intc, int number) {
-	int i;
-
-	for (i = 0; (*intc)[i].number; i++)
-		if ((*intc)[i].number == number) {
-			(*intc)[i].count++;
-			return;
-		}
-
-	(*intc)[i].number = number;
-	(*intc)[i].count = 1;
-	if (i)
-		*intc = erealloc(*intc, (i + 2) * sizeof(struct intcount));
-	(*intc)[i+1].number = 0;
-}
-
-int intmostcommon(struct intcount *intc) {
-	int i;
-	int max = 0;
-	int retval = 0;
-
-	for (i = 0; intc[i].number; i++)
-		if (intc[i].count > max) {
-			max = intc[i].count;
-			retval = intc[i].number;
-		}
-
-	return retval;
-}
-
-int icount(int *p, int len) {
+int intcount(int *p, int len) {
 	int i, j;
-	int ret;
+	int ret, max;
 	struct intcount *intc = ecalloc(2, sizeof(struct intcount));
 
+	// calculate occurence count for each int
 	for (i = 0; i < len; i++) {
-		printf("%d\n", *p);
-		intcount(&intc, *p);
-		p += sizeof(struct tracks);
+		for (j = 0; intc[j].number; j++)
+			if (intc[j].number == *p) {
+				intc[j].count++;
+				break;
+			}
+
+		intc[j].number = *p;
+		intc[j].count = 1;
+		if (j)
+			intc = erealloc(intc, (j + 2) * sizeof(struct intcount));
+		intc[j+1].number = 0;
+		p += sizeof(struct tracks); 
 	}
 
-	ret = intmostcommon(intc);
+	// find most common int
+	for (i = 0, max = 0; intc[i].number; i++)
+		if (intc[i].count > max) {
+			max = intc[i].count;
+			ret = intc[i].number;
+		}
+
 	free(intc);
 	return ret;
 }
@@ -243,9 +229,9 @@ void getaverages(struct albumdetails *ad, struct tracks *t) {
 	ad->artist = strcount(t[0].artist, ad->tracks, true);
 	ad->album = strcount(t[0].album, ad->tracks, false);
 	ad->genre = strcount(t[0].genre, ad->tracks, false);
-	ad->year = icount(&t[0].year, ad->tracks);
-	ad->samplerate = icount(&t[0].samplerate, ad->tracks);
-	ad->channels = icount(&t[0].channels, ad->tracks);
+	ad->year = intcount(&t[0].year, ad->tracks);
+	ad->samplerate = intcount(&t[0].samplerate, ad->tracks);
+	ad->channels = intcount(&t[0].channels, ad->tracks);
 }
 
 void printdetails(struct albumdetails *ad, struct tracks *t) {
