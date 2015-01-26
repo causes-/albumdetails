@@ -41,16 +41,6 @@ struct tracks {
 	int size;
 };
 
-struct intcount {
-	int number;
-	int count;
-};
-
-struct strcount {
-	char *str;
-	int count;
-};
-
 int filesize(char *filename) {
 	struct stat st;
 
@@ -150,8 +140,13 @@ int readfiles(struct tracks **t, char **files, int nfiles) {
 char *strcount(char *p, int len, bool artist) {
 	int i, j;
 	int max;
-	struct strcount *strc = ecalloc(2, sizeof(struct strcount));
 	char *ret;
+	struct strcount {
+		char *str;
+		int count;
+	} *strc;
+
+	strc = ecalloc(2, sizeof(struct strcount));
 
 	// calculate occurence count for each str
 	for (i = 0; i < len; i++) {
@@ -186,7 +181,12 @@ char *strcount(char *p, int len, bool artist) {
 int intcount(int *p, int len) {
 	int i, j;
 	int ret, max;
-	struct intcount *intc = ecalloc(2, sizeof(struct intcount));
+	struct intcount {
+		int number;
+		int count;
+	} *intc;
+
+	intc = ecalloc(2, sizeof(struct intcount));
 
 	// calculate occurence count for each int
 	for (i = 0; i < len; i++) {
