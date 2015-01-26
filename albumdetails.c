@@ -1,7 +1,6 @@
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
-#include <stdarg.h>
 #include <string.h>
 #include <tag_c.h>
 #include <sys/stat.h>
@@ -15,7 +14,7 @@ char *argv0;
 bool utf8flag = true;
 bool siunits = false;
 
-struct tracklist {
+struct albumdetails {
 	int tracks;
 	char *artist;
 	char *album;
@@ -26,19 +25,20 @@ struct tracklist {
 	int channels;
 	int length;
 	int size;
-	struct tracks {
-		char artist[BUFSIZ];
-		char album[BUFSIZ];
-		char genre[BUFSIZ];
-		int year;
-		int bitrate;
-		int samplerate;
-		int channels;
-		int track;
-		char title[BUFSIZ];
-		int length;
-		int size;
-	} *t;
+};
+
+struct tracks {
+	char artist[BUFSIZ];
+	char album[BUFSIZ];
+	char genre[BUFSIZ];
+	int year;
+	int bitrate;
+	int samplerate;
+	int channels;
+	int track;
+	char title[BUFSIZ];
+	int length;
+	int size;
 };
 
 struct intcount {
@@ -47,7 +47,7 @@ struct intcount {
 };
 
 struct strcount {
-	char str[BUFSIZ];
+	char *str;
 	int count;
 };
 
@@ -102,36 +102,36 @@ char *bytestostr(double bytes) {
 	return buf;
 }
 
-void readfiles(struct tracklist *tl, char **filenames, int n) {
+int readfiles(struct tracks **t, char **files, int nfiles) {
 	int i, j;
 	TagLib_File *file;
 	TagLib_Tag *tag;
 	const TagLib_AudioProperties *properties;
 
-	for (i = 0, j = 0; i < n; i++) {
-		file = taglib_file_new(filenames[i]);
+	for (i = 0, j = 0; i < nfiles; i++) {
+		file = taglib_file_new(files[i]);
 		if (!file) {
-			fprintf(stderr, "non-audio file: %s\n", filenames[i]);
+			fprintf(stderr, "non-audio file: %s\n", files[i]);
 			continue;
 		}
 
 		tag = taglib_file_tag(file);
 		properties = taglib_file_audioproperties(file);
 		if (!tag || !properties) {
-			fprintf(stderr, "Can't read meta-data for %s\n", filenames[i]);
+			fprintf(stderr, "Can't read meta-data for %s\n", files[i]);
 		} else {
-			strlcpy(tl->t[j].artist, taglib_tag_artist(tag), sizeof tl->t[j].artist);
-			strlcpy(tl->t[j].album, taglib_tag_album(tag), sizeof tl->t[j].album);
-			strlcpy(tl->t[j].genre, taglib_tag_genre(tag), sizeof tl->t[j].genre);
-			tl->t[j].year = taglib_tag_year(tag);
-			tl->t[j].bitrate = taglib_audioproperties_bitrate(properties);
-			tl->t[j].samplerate = taglib_audioproperties_samplerate(properties);
-			tl->t[j].channels = taglib_audioproperties_channels(properties);
+			strlcpy((*t)[j].artist, taglib_tag_artist(tag), sizeof (*t)[j].artist);
+			strlcpy((*t)[j].album, taglib_tag_album(tag), sizeof (*t)[j].album);
+			strlcpy((*t)[j].genre, taglib_tag_genre(tag), sizeof (*t)[j].genre);
+			(*t)[j].year = taglib_tag_year(tag);
+			(*t)[j].bitrate = taglib_audioproperties_bitrate(properties);
+			(*t)[j].samplerate = taglib_audioproperties_samplerate(properties);
+			(*t)[j].channels = taglib_audioproperties_channels(properties);
 
-			tl->t[j].track = taglib_tag_track(tag);
-			strlcpy(tl->t[j].title, taglib_tag_title(tag), sizeof tl->t[j].title);
-			tl->t[j].length = taglib_audioproperties_length(properties);
-			tl->t[j].size = filesize(filenames[i]);
+			(*t)[j].track = taglib_tag_track(tag);
+			strlcpy((*t)[j].title, taglib_tag_title(tag), sizeof (*t)[j].title);
+			(*t)[j].length = taglib_audioproperties_length(properties);
+			(*t)[j].size = filesize(files[i]);
 
 			j++;
 		}
@@ -139,12 +139,46 @@ void readfiles(struct tracklist *tl, char **filenames, int n) {
 		taglib_tag_free_strings();
 		taglib_file_free(file);
 
-		tl->t = erealloc(tl->t, (j + 2) * sizeof(struct tracks));
+		*t = erealloc(*t, (j + 2) * sizeof(struct tracks));
 	}
 
 	if (!j)
 		eprintf("Couldn't find any audio files\n");
-	tl->tracks = j;
+	return j;
+}
+
+void strcount(struct strcount **strc, char *token) {
+	int i;
+
+	for (i = 0; (*strc)[i].str; i++)
+		if (!strcmp((*strc)[i].str, token)) {
+			(*strc)[i].count++;
+			return;
+		}
+
+	(*strc)[i].str = token;
+	(*strc)[i].count++;
+	if (i)
+		*strc = erealloc(*strc, (i + 2) * sizeof(struct strcount));
+	(*strc)[i+1].str = NULL;
+	(*strc)[i+1].count = 0;
+}
+
+char *strmostcommon(struct strcount *str, bool artist) {
+	int i;
+	int max = 0;
+	char *p = NULL;
+
+	for (i = 0; str[i].str; i++)
+		if (str[i].count > max) {
+			max = str[i].count;
+			p = str[i].str;
+		}
+
+	if (artist && i > 3)
+		p = "VA";
+
+	return p;
 }
 
 void intcount(struct intcount **intc, int number) {
@@ -178,41 +212,7 @@ int intmostcommon(struct intcount *intc) {
 	return retval;
 }
 
-void strcount(struct strcount **strc, char *token) {
-	int i;
-
-	for (i = 0; (*strc)[i].str[0]; i++)
-		if (!strncmp((*strc)[i].str, token, sizeof (*strc)[i].str)) {
-			(*strc)[i].count++;
-			return;
-		}
-
-	strlcpy((*strc)[i].str, token, sizeof (*strc)[i].str);
-	(*strc)[i].count++;
-	if (i)
-		*strc = erealloc(*strc, (i + 2) * sizeof(struct strcount));
-	(*strc)[i+1].str[0] = '\0';
-	(*strc)[i+1].count = 0;
-}
-
-char *strmostcommon(struct strcount *str, bool artist) {
-	int i;
-	int max = 0;
-	char *p = NULL;
-
-	for (i = 0; str[i].str[0]; i++)
-		if (str[i].count > max) {
-			max = str[i].count;
-			p = str[i].str;
-		}
-
-	if (artist && i > 3)
-		p = "VA";
-
-	return p;
-}
-
-void getaverages(struct tracklist *tl) {
+void getaverages(struct albumdetails *ad, struct tracks *t) {
 	int i;
 	struct strcount *artists;
 	struct strcount *albums;
@@ -228,53 +228,60 @@ void getaverages(struct tracklist *tl) {
 	samplerates = ecalloc(2, sizeof(struct intcount));
 	channels = ecalloc(2, sizeof(struct intcount));
 
-	tl->avgbitrate = 0;
-	tl->length = 0;
-	tl->size = 0;
+	ad->avgbitrate = 0;
+	ad->length = 0;
+	ad->size = 0;
 
-	for (i = 0; i < tl->tracks; i++) {
-		tl->length += tl->t[i].length;
-		tl->size += tl->t[i].size;
-		tl->avgbitrate += tl->t[i].bitrate;
+	for (i = 0; i < ad->tracks; i++) {
+		ad->length += t[i].length;
+		ad->size += t[i].size;
+		ad->avgbitrate += t[i].bitrate;
 
-		strcount(&artists, tl->t[i].artist);
-		strcount(&albums, tl->t[i].album);
-		strcount(&genres, tl->t[i].genre);
-		intcount(&years, tl->t[i].year);
-		intcount(&samplerates, tl->t[i].samplerate);
-		intcount(&channels, tl->t[i].channels);
+		strcount(&artists, t[i].artist);
+		strcount(&albums, t[i].album);
+		strcount(&genres, t[i].genre);
+		intcount(&years, t[i].year);
+		intcount(&samplerates, t[i].samplerate);
+		intcount(&channels, t[i].channels);
 	}
 
-	tl->avgbitrate /= tl->tracks;
-	tl->artist = strmostcommon(artists, true);
-	tl->album = strmostcommon(albums, false);
-	tl->genre = strmostcommon(genres, false);
-	tl->year = intmostcommon(years);
-	tl->samplerate = intmostcommon(samplerates);
-	tl->channels = intmostcommon(channels);
+	ad->avgbitrate /= ad->tracks;
+	ad->artist = strmostcommon(artists, true);
+	ad->album = strmostcommon(albums, false);
+	ad->genre = strmostcommon(genres, false);
+	ad->year = intmostcommon(years);
+	ad->samplerate = intmostcommon(samplerates);
+	ad->channels = intmostcommon(channels);
+
+	free(artists);
+	free(albums);
+	free(genres);
+	free(years);
+	free(samplerates);
+	free(channels);
 }
 
-void printdetails(struct tracklist *tl) {
+void printdetails(struct albumdetails *ad, struct tracks *t) {
 	int i;
 
-	printf("Artist: %s\n", tl->artist);
-	printf("Album: %s\n", tl->album);
-	printf("Genre: %s\n", tl->genre);
-	printf("Year: %d\n", tl->year);
+	printf("Artist: %s\n", ad->artist);
+	printf("Album: %s\n", ad->album);
+	printf("Genre: %s\n", ad->genre);
+	printf("Year: %d\n", ad->year);
 	printf("Quality: %dkbps / %.1fkHz / %d channels\n\n",
-			tl->avgbitrate, tl->samplerate / 1000.0f, tl->channels);
+			ad->avgbitrate, ad->samplerate / 1000.0f, ad->channels);
 
-	for (i = 0; i < tl->tracks; i++)
-		if (!strncmp(tl->artist, "VA", 3))
+	for (i = 0; i < ad->tracks; i++)
+		if (!strncmp(ad->artist, "VA", 2))
 			printf("%2d. %s - %s (%s)\n",
-					tl->t[i].track, tl->t[i].artist, tl->t[i].title, secondstostr(tl->t[i].length));
+					t[i].track, t[i].artist, t[i].title, secondstostr(t[i].length));
 		else
 			printf("%2d. %s (%s)\n",
-					tl->t[i].track, tl->t[i].title, secondstostr(tl->t[i].length));
+					t[i].track, t[i].title, secondstostr(t[i].length));
 
 	printf("\n");
-	printf("Playing time: %s\n", secondstostr(tl->length));
-	printf("Total size: %s\n", bytestostr(tl->size));
+	printf("Playing time: %s\n", secondstostr(ad->length));
+	printf("Total size: %s\n", bytestostr(ad->size));
 }
 
 void usage(void) {
@@ -287,7 +294,8 @@ void usage(void) {
 }
 
 int main(int argc, char **argv) {
-	struct tracklist tl;
+	struct albumdetails ad;
+	struct tracks *t;
 
 	ARGBEGIN {
 	case 'i':
@@ -303,15 +311,15 @@ int main(int argc, char **argv) {
 	if (argc < 1)
 		usage();
 
+	t = emalloc(sizeof(struct tracks));
+
 	taglib_set_strings_unicode(utf8flag);
 
-	tl.t = emalloc(sizeof(struct tracks));
+	ad.tracks = readfiles(&t, argv, argc);
 
-	readfiles(&tl, argv, argc);
+	getaverages(&ad, t);
 
-	getaverages(&tl);
-
-	printdetails(&tl);
+	printdetails(&ad, t);
 
 	return EXIT_SUCCESS;
 }
