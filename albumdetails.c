@@ -162,7 +162,7 @@ char *strcount(char *p, int len, bool artist) {
 			strc = erealloc(strc, (j + 2) * sizeof(struct strcount));
 		strc[j+1].str = NULL;
 
-		p += sizeof(struct tracks); 
+		p += sizeof(struct tracks) / sizeof(char);
 	}
 
 	// find most common str
@@ -201,7 +201,7 @@ int intcount(int *p, int len) {
 		if (j)
 			intc = erealloc(intc, (j + 2) * sizeof(struct intcount));
 		intc[j+1].number = 0;
-		p += sizeof(struct tracks); 
+		p += sizeof(struct tracks) / sizeof(int);
 	}
 
 	// find most common int
